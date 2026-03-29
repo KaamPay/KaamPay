@@ -1,6 +1,6 @@
 # KaamPay 🇮🇳
 
-> Voice-first AI payroll and credit identity for India's 400M daily wage workers. Built for **Fin-O-Hack (Paytm × Assets DTU)**.
+> Voice-first AI payroll and credit identity for India's 400M daily wage workers.
 
 KaamPay eliminates exploitation in the unorganized sector by replacing manual, paper-based wage logging with an AI-driven, WhatsApp-delivered digital payroll system. It uses voice recognition, real-time minimum wage compliance checks, and Paytm UPI to distribute wages instantly while building a verifiable "KaamScore" (Credit Identity) for the unbanked.
 
