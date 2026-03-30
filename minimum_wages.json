@@ -1,32 +1,12 @@
 {
-  "Delhi": {
-    "unskilled": 746,
-    "semi_skilled": 824,
-    "skilled": 905,
-    "effective_date": "2025-10-01"
-  },
-  "Maharashtra": {
-    "unskilled": 612,
-    "semi_skilled": 680,
-    "skilled": 748,
-    "effective_date": "2025-07-01"
-  },
-  "Uttar Pradesh": {
-    "unskilled": 537,
-    "semi_skilled": 589,
-    "skilled": 641,
-    "effective_date": "2025-04-01"
-  },
-  "Karnataka": {
-    "unskilled": 672,
-    "semi_skilled": 740,
-    "skilled": 812,
-    "effective_date": "2025-09-01"
-  },
-  "Tamil Nadu": {
-    "unskilled": 558,
-    "semi_skilled": 614,
-    "skilled": 672,
-    "effective_date": "2025-06-01"
-  }
+  "Delhi": {"unskilled": 746, "semi_skilled": 824, "skilled": 905},
+  "Maharashtra": {"unskilled": 612, "semi_skilled": 680, "skilled": 748},
+  "UP": {"unskilled": 537, "semi_skilled": 589, "skilled": 641},
+  "Karnataka": {"unskilled": 672, "semi_skilled": 740, "skilled": 812},
+  "Tamil Nadu": {"unskilled": 558, "semi_skilled": 614, "skilled": 672},
+  "Gujarat": {"unskilled": 483, "semi_skilled": 531, "skilled": 579},
+  "Rajasthan": {"unskilled": 496, "semi_skilled": 546, "skilled": 596},
+  "Punjab": {"unskilled": 585, "semi_skilled": 643, "skilled": 702},
+  "Haryana": {"unskilled": 596, "semi_skilled": 656, "skilled": 716},
+  "Bihar": {"unskilled": 411, "semi_skilled": 452, "skilled": 493}
 }

@@ -1,39 +1,84 @@
 {
+  "app_name": "KaamPay",
+  "tagline_hindi": "काम का हिसाब, मज़दूर का हक़",
+  "tagline_english": "Fair wages. Verified identity.",
+  "powered_by": "Paytm UPI + Paytm Payments Bank",
+
   "demo_contractor": {
+    "contractor_id": "CONT_001",
     "name": "Suresh Sharma",
     "business": "Sharma Construction",
     "location": "Delhi",
-    "paytm_id": "MOCK_CONTRACTOR_001",
-    "state": "Delhi"
+    "phone": "9876500001",
+    "state": "Delhi",
+    "paytm_id": "PAYTM_CONT_001",
+    "paytm_account": "PAYTM_CONT_001",
+    "balance": 15000
   },
+
   "demo_workers": [
     {
+      "worker_id": "W001",
       "id": "W001",
       "name": "Ramesh Kumar",
-      "aadhaar_last4": "4521",
-      "paytm_wallet": "MOCK_W001",
+      "phone": "9876500002",
       "phone_type": "feature_phone",
-      "days_in_system": 47
+      "aadhaar_last4": "4521",
+      "aadhaar_verified": true,
+      "card_assigned": false,
+      "job_type": "unskilled",
+      "days_in_system": 47,
+      "kaam_score": 487,
+      "band": "developing"
     },
     {
+      "worker_id": "W002",
       "id": "W002",
       "name": "Suresh Yadav",
-      "aadhaar_last4": "7832",
-      "paytm_wallet": "MOCK_W002",
+      "phone": null,
       "phone_type": "no_phone",
-      "days_in_system": 23
+      "aadhaar_last4": "7832",
+      "aadhaar_verified": true,
+      "card_assigned": true,
+      "card_last4": "8321",
+      "job_type": "unskilled",
+      "days_in_system": 23,
+      "kaam_score": 312,
+      "band": "basic"
     },
     {
+      "worker_id": "W003",
       "id": "W003",
       "name": "Mohan Lal",
-      "aadhaar_last4": "3319",
-      "paytm_wallet": "MOCK_W003",
+      "phone": "9876500004",
       "phone_type": "smartphone",
-      "days_in_system": 61
+      "aadhaar_last4": "3319",
+      "aadhaar_verified": true,
+      "card_assigned": false,
+      "job_type": "semi_skilled",
+      "days_in_system": 61,
+      "kaam_score": 621,
+      "band": "established"
     }
   ],
+
   "demo_audio_transcript": "Ramesh aur Suresh ne aaj kaam kiya, 8 ghante, 700 rupay rate. Aur Mohan ne aadha din kiya.",
   "demo_date": "2026-03-29",
-  "delhi_minimum_wage_unskilled": 746,
-  "demo_job_type": "construction"
+
+  "minimum_wages": {
+    "Delhi": {"unskilled": 746, "semi_skilled": 824, "skilled": 905},
+    "Maharashtra": {"unskilled": 612, "semi_skilled": 680, "skilled": 748},
+    "UP": {"unskilled": 537, "semi_skilled": 589, "skilled": 641},
+    "Karnataka": {"unskilled": 672, "semi_skilled": 740, "skilled": 812},
+    "Tamil Nadu": {"unskilled": 558, "semi_skilled": 614, "skilled": 672}
+  },
+
+  "seasonal_low_months": [6, 7, 8, 9],
+  "max_wallet_limit_basic": 10000,
+  "max_wallet_limit_full_kyc": 100000,
+  "card_cost_per_worker": 50,
+  "starter_pack_cards": 20,
+  "starter_pack_cost": 1000,
+  "dispute_number": "1800-XXX-XXXX",
+  "max_payment_retries": 2
 }

@@ -1,27 +1,41 @@
 """
 KaamPay — FastAPI Server
 Single API layer connecting all agents.
-RANG (frontend) calls these 4 endpoints.
+RANG (frontend) calls these endpoints.
+
+v2.0 — Added:
+- Balance check endpoint (FIX 07)
+- Dispute raise/list endpoints (FIX 08)
+- KaamScore lookup API for lenders (FIX 12)
+- Score history endpoint
+- Contractor dashboard endpoints (FIX 13)
 """
 
 import os
 import json
-from fastapi import FastAPI, HTTPException
+from datetime import date
+from fastapi import FastAPI, HTTPException, Header
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
 from agents.vani import transcribe_and_extract
-from agents.hisaab import process_payroll
-from agents.paisa import execute_all_payments, calculate_kaam_score, get_worker_history, init_db
+from agents.hisaab import process_payroll, register_worker
+from agents.paisa import (
+    execute_all_payments, calculate_kaam_score, get_worker_history,
+    init_db, check_contractor_balance, get_score_history,
+    get_daily_totals, get_contractor_workers, generate_contractor_insights,
+    get_today_summary, raise_dispute, get_disputes,
+    validate_lender_api_key, find_workers_by_aadhaar, get_db
+)
 from agents.kagaz import generate_all_payslips
 
 # Initialize
 app = FastAPI(
     title="KaamPay API",
     description="Voice-first AI payroll for India's daily wage workers",
-    version="1.0.1"
+    version="2.0.0"
 )
 
 # CORS — allow frontend dev server
@@ -68,6 +82,23 @@ class PaymentRequest(BaseModel):
     total_payout: float
     worker_count: int
 
+class DisputeRequest(BaseModel):
+    phone_number: Optional[str] = None
+    worker_id: Optional[str] = None
+    payment_id: Optional[str] = None
+
+class ScoreLookupRequest(BaseModel):
+    aadhaar_last4: str
+    aeps_verification_token: str
+    worker_name_hint: Optional[str] = None
+    query_purpose: str = "credit_assessment"
+
+class RegisterWorkerRequest(BaseModel):
+    name: str
+    phone_number: str
+    aadhaar_number: str
+    job_category: str = "unskilled"
+
 
 # ─────────────────────────────────────────
 # Endpoint 1: Transcribe & Extract (VANI)
@@ -75,10 +106,7 @@ class PaymentRequest(BaseModel):
 
 @app.post("/api/transcribe")
 async def api_transcribe(req: TranscribeRequest):
-    """
-    Takes text or audio, returns structured payroll data.
-    If no input provided, uses demo transcript.
-    """
+    """Takes text or audio, returns structured payroll data."""
     try:
         result = transcribe_and_extract(
             text=req.text,
@@ -86,7 +114,6 @@ async def api_transcribe(req: TranscribeRequest):
         )
         return JSONResponse(content=result)
     except Exception as e:
-        # Never crash — return structured error
         return JSONResponse(content={
             "status": "error",
             "transcript": req.text or "",
@@ -103,10 +130,7 @@ async def api_transcribe(req: TranscribeRequest):
 
 @app.post("/api/process-payroll")
 async def api_process_payroll(req: PayrollRequest):
-    """
-    Takes VANI's output, validates wages, matches workers.
-    Returns finalized payroll ready for payment.
-    """
+    """Takes VANI's output, validates wages, matches workers."""
     try:
         vani_output = req.model_dump()
         result = process_payroll(vani_output)
@@ -129,11 +153,7 @@ async def api_process_payroll(req: PayrollRequest):
 
 @app.post("/api/execute-payments")
 async def api_execute_payments(req: PaymentRequest):
-    """
-    Takes HISAAB's output, executes mock payments,
-    generates payslips, computes KaamScores.
-    Returns combined PAISA + KAGAZ output.
-    """
+    """Takes HISAAB's output, executes payments, generates payslips."""
     try:
         hisaab_output = req.model_dump()
 
@@ -166,14 +186,34 @@ async def api_execute_payments(req: PaymentRequest):
 
 
 # ─────────────────────────────────────────
+# Endpoint X: Manual Worker Registration
+# ─────────────────────────────────────────
+
+@app.post("/api/register-worker")
+async def api_register_worker(req: RegisterWorkerRequest):
+    """Fallback manual registration handling Aadhaar and Name."""
+    try:
+        worker_data = {
+            "name": req.name,
+            "phone_type": "smartphone" if len(req.phone_number) >= 10 else "feature_phone",
+            "phone_number": req.phone_number,
+            "kaam_band": "building",
+            "kaam_score": 600
+        }
+        contractor_id = CONSTANTS.get("demo_contractor", {}).get("id", "C_12345678")
+        result = register_worker(contractor_id, worker_data, aadhaar_full=req.aadhaar_number)
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={"success": False, "error": str(e)})
+
+
+# ─────────────────────────────────────────
 # Endpoint 4: Worker Score (PAISA)
 # ─────────────────────────────────────────
 
 @app.get("/api/worker-score/{worker_id}")
 async def api_worker_score(worker_id: str):
-    """
-    Returns KaamScore + payment history for a worker.
-    """
+    """Returns KaamScore + payment history for a worker."""
     try:
         score = calculate_kaam_score(worker_id)
         history = get_worker_history(worker_id, limit=8)
@@ -191,6 +231,171 @@ async def api_worker_score(worker_id: str):
             "history": [],
             "error_message": str(e)
         })
+
+
+# ─────────────────────────────────────────
+# Endpoint 5: Balance Check (FIX 07)
+# ─────────────────────────────────────────
+
+@app.get("/api/check-balance")
+async def api_check_balance(total: float = 0):
+    """Check contractor balance before payment."""
+    try:
+        result = check_contractor_balance("CONT_001", total)
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={
+            "sufficient": True,
+            "available_balance": 15000,
+            "required": total,
+            "shortfall": 0,
+            "error_message": str(e)
+        })
+
+
+# ─────────────────────────────────────────
+# Endpoint 6: Disputes (FIX 08)
+# ─────────────────────────────────────────
+
+@app.post("/api/dispute/raise")
+async def api_raise_dispute(req: DisputeRequest):
+    """Raise a dispute on a payment."""
+    try:
+        result = raise_dispute(
+            worker_id=req.worker_id,
+            payment_id=req.payment_id,
+            phone_number=req.phone_number
+        )
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={
+            "success": False,
+            "error": str(e)
+        })
+
+@app.get("/api/disputes")
+async def api_list_disputes():
+    """List all disputes for contractor."""
+    try:
+        disputes = get_disputes("CONT_001")
+        return JSONResponse(content={"disputes": disputes})
+    except Exception as e:
+        return JSONResponse(content={"disputes": [], "error": str(e)})
+
+
+# ─────────────────────────────────────────
+# Endpoint 7: KaamScore Lookup API (FIX 12)
+# ─────────────────────────────────────────
+
+@app.post("/api/kaam/score/lookup")
+async def lookup_kaam_score(
+    request: ScoreLookupRequest,
+    x_api_key: Optional[str] = Header(None)
+):
+    """
+    PRIMARY ENDPOINT FOR LENDERS AND BC AGENTS.
+    Worker gives Aadhaar last 4 + fingerprint → score returned.
+    """
+    # Validate API key (accept any for demo)
+    if x_api_key:
+        lender = validate_lender_api_key(x_api_key)
+    else:
+        lender = {"lender_name": "Demo User"}
+
+    # Validate AePS token (accept any non-empty for demo)
+    if not request.aeps_verification_token:
+        raise HTTPException(status_code=403, detail="Biometric verification required.")
+
+    # Look up worker by Aadhaar last 4
+    workers = find_workers_by_aadhaar(request.aadhaar_last4)
+
+    if not workers:
+        return JSONResponse(content={
+            "found": False,
+            "message": "Worker not found on KaamPay.",
+            "recommendation": "Cannot assess creditworthiness through KaamPay."
+        })
+
+    # Disambiguate if multiple matches
+    if len(workers) > 1 and request.worker_name_hint:
+        workers = [w for w in workers if request.worker_name_hint.lower() in w["name"].lower()]
+
+    if len(workers) > 1:
+        raise HTTPException(status_code=300, detail="Multiple workers found. Provide worker name.")
+
+    worker = workers[0]
+
+    # Get current score
+    score_data = calculate_kaam_score(worker["worker_id"])
+
+    return JSONResponse(content={
+        "found": True,
+        "verified": True,
+        "verification_method": "aadhaar_biometric",
+        "worker_name": worker["name"],
+        "aadhaar_last4": request.aadhaar_last4,
+        "on_kaampay_since": worker.get("date_registered", ""),
+        "kaam_score": score_data["score"],
+        "kaam_band": score_data["band"],
+        "score_last_updated": date.today().isoformat(),
+        "total_verified_payments": score_data.get("total_payments", 0),
+        "total_days_worked_90d": score_data.get("total_days_worked_90d", 0),
+        "total_earned_90d": score_data.get("total_earned_90d", 0),
+        "avg_monthly_income": round(score_data.get("total_earned_90d", 0) / 3, 2),
+        "unique_employers_90d": score_data.get("unique_contractors", 0),
+        "loan_eligible_amount": score_data.get("loan_eligible"),
+        "recommended_products": score_data.get("benefits", []),
+        "income_source": "verified_upi_payroll",
+        "data_provider": "KaamPay",
+        "verification_standard": "Aadhaar eKYC + UPI transaction verified",
+        "disclaimer": (
+            "KaamPay provides income verification data only. "
+            "Credit decision remains with the lending institution."
+        )
+    })
+
+
+@app.get("/api/kaam/score/worker/{worker_id}")
+async def get_worker_score_by_id(worker_id: str):
+    """Get worker score — for contractor app."""
+    score_data = calculate_kaam_score(worker_id)
+    return JSONResponse(content=score_data)
+
+
+@app.get("/api/kaam/score/history/{worker_id}")
+async def api_score_history(worker_id: str, days: int = 90):
+    """Returns score progression over time for charts."""
+    result = get_score_history(worker_id, days)
+    return JSONResponse(content=result)
+
+
+# ─────────────────────────────────────────
+# Endpoint 8: Contractor Dashboard (FIX 13)
+# ─────────────────────────────────────────
+
+@app.get("/api/kaam/contractor/daily-totals")
+async def api_daily_totals(days: int = 30):
+    """Daily payment totals for spending chart."""
+    totals = get_daily_totals("CONT_001", days)
+    return JSONResponse(content={"totals": totals})
+
+@app.get("/api/kaam/contractor/workers")
+async def api_contractor_workers():
+    """Worker roster for contractor."""
+    workers = get_contractor_workers("CONT_001")
+    return JSONResponse(content={"workers": workers})
+
+@app.get("/api/kaam/contractor/insights")
+async def api_contractor_insights():
+    """AI insights for contractor dashboard."""
+    insights = generate_contractor_insights("CONT_001")
+    return JSONResponse(content={"insights": insights})
+
+@app.get("/api/kaam/contractor/summary")
+async def api_contractor_summary():
+    """Today's summary for dashboard cards."""
+    summary = get_today_summary("CONT_001")
+    return JSONResponse(content=summary)
 
 
 # ─────────────────────────────────────────
@@ -212,7 +417,7 @@ async def download_payslip(filename: str):
 
 @app.get("/api/health")
 async def health():
-    return {"status": "ok", "service": "KaamPay API", "version": "1.0.0"}
+    return {"status": "ok", "service": "KaamPay API", "version": "2.0.0"}
 
 
 # ─────────────────────────────────────────

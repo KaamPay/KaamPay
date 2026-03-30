@@ -1,11 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import { apiWorkerScore } from '../api';
-import { DEMO_PAISA_OUTPUT, DEMO_WORKER_HISTORY } from '../demo_data';
+import { DEMO_PAISA_OUTPUT, DEMO_WORKER_HISTORY, CONSTANTS } from '../demo_data';
 
 /**
  * Screen 5: Worker Profile / KaamScore
  * THE SECOND EMOTIONAL PEAK — the credit identity.
- * Shows score, eligibility, payslip history, download.
+ * v2.0 — Dispute info line (FIX 08), demoMode
  */
 
 const ELIGIBILITY_ICONS = {
@@ -15,7 +15,7 @@ const ELIGIBILITY_ICONS = {
   bank: "🏦"
 };
 
-export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
+export default function WorkerProfile({ worker, paisaOutput, onBack, onHome, demoMode }) {
   const [scoreData, setScoreData] = useState(null);
   const [history, setHistory] = useState([]);
   const [animateScore, setAnimateScore] = useState(false);
@@ -25,16 +25,14 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
 
     const loadData = async () => {
       try {
-        const result = await apiWorkerScore(worker.worker_id);
+        const result = await apiWorkerScore(worker.worker_id, demoMode);
         setScoreData(result.score);
         setHistory(result.history || []);
       } catch {
-        // Fallback
         setScoreData(DEMO_PAISA_OUTPUT.scores[worker.worker_id] || { score: 0, band: "building" });
         setHistory(DEMO_WORKER_HISTORY[worker.worker_id] || []);
       }
 
-      // Trigger score animation after brief delay
       setTimeout(() => setAnimateScore(true), 300);
     };
 
@@ -66,22 +64,21 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
 
       {/* Worker Info Card */}
       <div className="card card-elevated mt-6" style={{
-        background: 'linear-gradient(135deg, var(--green-50), var(--white))',
+        background: 'linear-gradient(135deg, var(--blue-50), var(--white))',
         textAlign: 'center',
         padding: '24px 20px'
       }}>
-        {/* Avatar */}
         <div className="worker-avatar large" style={{ margin: '0 auto' }}>
-          {worker.worker_name.split(' ').map(n => n[0]).join('')}
+          {(worker.worker_name || worker.name || "?").split(' ').map(n => n[0]).join('')}
         </div>
 
-        <h2 style={{ marginTop: '12px', fontSize: '1.375rem' }}>{worker.worker_name}</h2>
+        <h2 style={{ marginTop: '12px', fontSize: '1.375rem' }}>{worker.worker_name || worker.name}</h2>
         <p className="text-xs text-gray" style={{ marginTop: '2px' }}>
-          Aadhaar: •••• {worker.aadhaar_last4}
+          Aadhaar: •••• {worker.aadhaar_last4 || "••••"}
         </p>
         <p className="text-sm" style={{
           fontFamily: 'var(--font-hi)',
-          color: 'var(--green-600)',
+          color: 'var(--blue-600)',
           marginTop: '4px'
         }}>
           {scoreData.days_in_system} din se KaamPay par
@@ -95,7 +92,7 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
       <div className="card mt-4 p-4">
         <div className="bilingual mb-3">
           <p className="en text-sm">KaamScore</p>
-          <p className="hi">मज़दूर स्कोर</p>
+          <p className="hi">काम स्कोर</p>
         </div>
 
         {/* Score Number */}
@@ -112,7 +109,6 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
           <div className="score-bar-track">
             <div className="score-bar-fill" style={{ width: `${scorePercent}%` }} />
           </div>
-          {/* Band markers */}
           <div className="flex justify-between mt-1">
             <span className="text-xs text-gray">0</span>
             <span className="text-xs text-gray" style={{ position: 'absolute', left: '35.3%' }}>300</span>
@@ -127,11 +123,11 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
           <div style={{
             marginTop: '12px',
             padding: '8px 12px',
-            background: 'var(--green-50)',
+            background: 'var(--blue-50)',
             borderRadius: 'var(--radius-md)',
             fontSize: '0.75rem'
           }}>
-            <span style={{ color: 'var(--green-700)' }}>
+            <span style={{ color: 'var(--blue-700)' }}>
               {scoreData.progress_to_next_band.points_needed} points to <strong>{scoreData.progress_to_next_band.next_band}</strong>
             </span>
           </div>
@@ -164,7 +160,7 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
       {/* Eligibility Section */}
       <div className="mt-4">
         <div className="bilingual mb-3">
-          <p className="en text-sm font-semibold" style={{ color: 'var(--green-700)' }}>
+          <p className="en text-sm font-semibold" style={{ color: 'var(--blue-700)' }}>
             You are eligible for
           </p>
           <p className="hi">Aap eligible hain</p>
@@ -186,13 +182,23 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
                   {item.name_hindi}
                 </p>
                 <div className="flex items-center gap-2 mt-1">
-                  <span className="text-xs font-bold text-green">{item.amount}</span>
+                  <span className="text-xs font-bold text-blue">{item.amount}</span>
                   <span className="text-xs text-gray">• {item.provider}</span>
                 </div>
               </div>
             </div>
           ))}
         </div>
+      </div>
+
+      {/* Dispute Information (FIX 08) */}
+      <div className="dispute-info mt-4">
+        <p className="text-xs" style={{ fontFamily: 'var(--font-hi)', color: 'var(--gray-500)' }}>
+          💬 Galat laga? Miss call karein: {CONSTANTS.dispute_number} (Free, 24/7)
+        </p>
+        <p className="text-xs text-gray">
+          Dispute? Missed call: {CONSTANTS.dispute_number} (Free)
+        </p>
       </div>
 
       {/* Payment History Timeline */}
@@ -213,7 +219,7 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
                     {record.days_worked} day{record.days_worked !== 1 ? 's' : ''} • ₹{record.rate_per_day}/day
                   </p>
                 </div>
-                <p className="text-sm font-bold text-green">₹{record.gross_pay.toLocaleString()}</p>
+                <p className="text-sm font-bold text-blue">₹{record.gross_pay.toLocaleString()}</p>
               </div>
             </div>
           ))}
@@ -235,7 +241,7 @@ export default function WorkerProfile({ worker, paisaOutput, onBack, onHome }) {
             </div>
             <p style={{
               fontSize: '1.5rem', fontWeight: 800,
-              color: 'var(--green-700)', letterSpacing: '-0.02em'
+              color: 'var(--blue-700)', letterSpacing: '-0.02em'
             }}>
               ₹{scoreData.total_earned_90d.toLocaleString()}
             </p>

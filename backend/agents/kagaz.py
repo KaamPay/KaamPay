@@ -2,6 +2,10 @@
 KAGAZ — Document Generation Agent
 Generates payslips in PDF, WhatsApp, and SMS formats.
 The payslip is the most emotionally powerful part of the demo.
+
+v2.0 — Added:
+- Dispute line on all payslip formats (FIX 08)
+- card_load delivery type
 """
 
 import os
@@ -24,12 +28,24 @@ with open(CONSTANTS_PATH, 'r', encoding='utf-8') as f:
     CONSTANTS = json.load(f)
 
 # Colors
-GREEN = HexColor("#1a472a")
+DARK_BLUE = HexColor("#002e6e")
 AMBER = HexColor("#f59e0b")
 PAYTM_BLUE = HexColor("#00BAF2")
 LIGHT_GRAY = HexColor("#f3f4f6")
 DARK_TEXT = HexColor("#111827")
 MID_GRAY = HexColor("#6b7280")
+
+DISPUTE_NUMBER = CONSTANTS.get("dispute_number", "1800-XXX-XXXX")
+
+
+def generate_dispute_line(payment_id):
+    """Generate dispute text for payslips."""
+    short_id = payment_id[:8] if payment_id else "N/A"
+    return {
+        "hindi": f"Galat laga? Miss call karein: {DISPUTE_NUMBER} (Free, 24/7) | ID: {short_id}",
+        "english": f"Dispute? Missed call: {DISPUTE_NUMBER} (Free) | ID: {short_id}",
+        "short_id": short_id
+    }
 
 
 def generate_qr_code(data: dict) -> io.BytesIO:
@@ -42,7 +58,7 @@ def generate_qr_code(data: dict) -> io.BytesIO:
     )
     qr.add_data(json.dumps(data, ensure_ascii=False))
     qr.make(fit=True)
-    img = qr.make_image(fill_color="#1a472a", back_color="white")
+    img = qr.make_image(fill_color="#002e6e", back_color="white")
     buffer = io.BytesIO()
     img.save(buffer, format="PNG")
     buffer.seek(0)
@@ -54,14 +70,14 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
     Generate a dignified A6 payslip PDF.
     Returns the file path of the generated PDF.
     """
-    filename = f"{entry['worker_id']}_{CONSTANTS['demo_date'].replace('-', '')}.pdf"
+    filename = f"{entry['worker_id']}_{CONSTANTS.get('demo_date', '20260329').replace('-', '')}.pdf"
     filepath = os.path.join(PAYSLIPS_DIR, filename)
 
     w, h = A6  # 297 x 420 points (105mm x 148mm)
     c = canvas.Canvas(filepath, pagesize=A6)
 
     # ── Header Bar ──
-    c.setFillColor(GREEN)
+    c.setFillColor(DARK_BLUE)
     c.rect(0, h - 55, w, 55, fill=1, stroke=0)
 
     c.setFillColor(HexColor("#ffffff"))
@@ -82,7 +98,7 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
     c.setFont("Helvetica", 8)
     c.setFillColor(MID_GRAY)
     c.drawString(12, y, f"Aadhaar: XXXX-XXXX-{entry.get('aadhaar_last4', '0000')}")
-    c.drawString(w - 95, y, f"Date: {CONSTANTS['demo_date']}")
+    c.drawString(w - 95, y, f"Date: {CONSTANTS.get('demo_date', '')}")
 
     # ── Separator ──
     y -= 10
@@ -115,7 +131,7 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
 
     # Row: Gross
     y -= 15
-    c.drawString(12, y, f"Gross Pay (Kul mazdoori)")
+    c.drawString(12, y, f"Gross Pay (Kul kamaai)")
     c.drawString(w - 80, y, f"Rs.{int(entry['gross_pay'])}")
 
     # Row: Deductions
@@ -125,14 +141,14 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
 
     # Separator before net
     y -= 8
-    c.setStrokeColor(GREEN)
+    c.setStrokeColor(DARK_BLUE)
     c.setLineWidth(1.5)
     c.line(12, y, w - 12, y)
 
     # Row: Net Pay (BOLD, large)
     y -= 18
     c.setFont("Helvetica-Bold", 13)
-    c.setFillColor(GREEN)
+    c.setFillColor(DARK_BLUE)
     c.drawString(12, y, "NET PAY")
     c.drawString(w - 90, y, f"Rs.{int(entry['net_pay'])}")
 
@@ -172,10 +188,8 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
     y -= 12
     bar_width = w - 24
     bar_height = 8
-    # Background bar
     c.setFillColor(LIGHT_GRAY)
     c.rect(12, y, bar_width, bar_height, fill=1, stroke=0)
-    # Score fill
     fill_width = (score.get('score', 0) / 850) * bar_width
     c.setFillColor(AMBER)
     c.rect(12, y, fill_width, bar_height, fill=1, stroke=0)
@@ -189,7 +203,7 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
     qr_data = {
         "worker": entry["worker_name"],
         "worker_id": entry["worker_id"],
-        "date": CONSTANTS["demo_date"],
+        "date": CONSTANTS.get("demo_date", ""),
         "net_pay": entry["net_pay"],
         "txn": payment.get("transaction_id", "N/A"),
         "issuer": "KaamPay",
@@ -198,6 +212,12 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
     qr_buffer = generate_qr_code(qr_data)
     qr_image = ImageReader(qr_buffer)
     c.drawImage(qr_image, w - 82, 12, width=68, height=68)
+
+    # ── Dispute Line (FIX 08) ──
+    dispute = generate_dispute_line(payment.get("payment_id", payment.get("transaction_id", "N/A")))
+    c.setFont("Helvetica", 5.5)
+    c.setFillColor(MID_GRAY)
+    c.drawString(12, 42, dispute["hindi"])
 
     # ── Footer ──
     c.setFont("Helvetica", 6)
@@ -211,12 +231,13 @@ def generate_payslip_pdf(entry: dict, payment: dict, score: dict, contractor: di
 
 
 def generate_whatsapp_message(entry: dict, payment: dict, contractor: dict) -> str:
-    """Generate WhatsApp payslip message (bilingual)."""
+    """Generate WhatsApp payslip message (bilingual) with dispute line."""
+    dispute = generate_dispute_line(payment.get("payment_id", payment.get("transaction_id", "N/A")))
     return f"""*KaamPay Payslip*
 *KaamPay Salary Parchi*
 
 Naam: {entry['worker_name']}
-Tarikh: {CONSTANTS['demo_date']}
+Tarikh: {CONSTANTS.get('demo_date', '')}
 Kaam ke din: {entry['days_worked']}
 Rate: ₹{int(entry['rate_per_day'])}/din
 *Net Pay: ₹{int(entry['net_pay'])}*
@@ -224,35 +245,29 @@ Rate: ₹{int(entry['rate_per_day'])}/din
 UPI Ref: {payment.get('upi_reference', 'N/A')}
 Employer: {contractor.get('business', 'N/A')}
 
+---
+{dispute['hindi']}
+
 _KaamPay — Paytm se bheja_"""
 
 
 def generate_sms_message(entry: dict, payment: dict) -> str:
-    """Generate SMS payslip (< 160 chars)."""
-    return f"KaamPay: {entry['worker_name']} ko ₹{int(entry['net_pay'])} bheje. {entry['days_worked']} din, ₹{int(entry['rate_per_day'])}/din. UPI:{payment.get('upi_reference', 'N/A')[:12]}"
+    """Generate SMS payslip (< 160 chars) with dispute hint."""
+    return (
+        f"KaamPay: {entry['worker_name']} ko ₹{int(entry['net_pay'])} bheje. "
+        f"{entry['days_worked']} din, ₹{int(entry['rate_per_day'])}/din. "
+        f"UPI:{payment.get('upi_reference', 'N/A')[:12]}. "
+        f"Dispute:{DISPUTE_NUMBER}"
+    )
 
 
 def generate_all_payslips(hisaab_output: dict, payment_results: list, scores: dict) -> dict:
     """
     Generate payslips for all workers.
-    
-    Output contract:
-    {
-        "payslips": {
-            "W001": {
-                "pdf_path": "payslips/W001_20260329.pdf",
-                "pdf_url": "/api/payslip/W001_20260329.pdf",
-                "whatsapp_text": "...",
-                "sms_text": "...",
-                "qr_data": {...},
-                "delivery_method": "sms_payslip"
-            }
-        }
-    }
     """
     try:
         payslips = {}
-        contractor = hisaab_output.get("contractor", CONSTANTS["demo_contractor"])
+        contractor = hisaab_output.get("contractor", CONSTANTS.get("demo_contractor", {}))
 
         for i, entry in enumerate(hisaab_output.get("entries", [])):
             worker_id = entry["worker_id"]
@@ -277,7 +292,7 @@ def generate_all_payslips(hisaab_output: dict, payment_results: list, scores: di
             qr_data = {
                 "worker": entry["worker_name"],
                 "worker_id": worker_id,
-                "date": CONSTANTS["demo_date"],
+                "date": CONSTANTS.get("demo_date", ""),
                 "net_pay": entry["net_pay"],
                 "txn": payment.get("transaction_id", "N/A"),
                 "issuer": "KaamPay",
@@ -290,7 +305,7 @@ def generate_all_payslips(hisaab_output: dict, payment_results: list, scores: di
                 "whatsapp_text": whatsapp_text,
                 "sms_text": sms_text,
                 "qr_data": qr_data,
-                "delivery_method": entry.get("delivery_method", "qr_paper_receipt")
+                "delivery_method": entry.get("delivery_method", "card_load")
             }
 
         return {"payslips": payslips}

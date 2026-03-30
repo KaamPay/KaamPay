@@ -1,10 +1,9 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect } from 'react';
 
 /**
  * Screen 4: Payment Success
  * THE EMOTIONAL PEAK OF THE DEMO.
- * Payments process one-by-one with animated counters.
- * Confetti on completion.
+ * v2.0 — Retry status for held payments (FIX 06), logo fix, demoMode
  */
 
 function AnimatedCounter({ target, duration = 1000 }) {
@@ -27,7 +26,7 @@ function AnimatedCounter({ target, duration = 1000 }) {
 }
 
 function ConfettiEffect() {
-  const colors = ['#1a472a', '#f59e0b', '#00BAF2', '#34a853', '#ef4444', '#8b5cf6', '#ec4899'];
+  const colors = ['#002e6e', '#f59e0b', '#00BAF2', '#34a853', '#ef4444', '#8b5cf6', '#ec4899'];
   const pieces = Array.from({ length: 60 }, (_, i) => ({
     id: i,
     color: colors[i % colors.length],
@@ -61,10 +60,11 @@ function ConfettiEffect() {
 const DELIVERY_ICONS = {
   whatsapp_payslip: { icon: "📱", text: "WhatsApp payslip sent", textHi: "WhatsApp payslip भेजी गई" },
   sms_payslip: { icon: "💬", text: "SMS payslip sent", textHi: "SMS payslip भेजी गई" },
-  qr_paper_receipt: { icon: "📄", text: "QR receipt ready for printing", textHi: "QR रसीद प्रिंट के लिए तैयार" }
+  qr_paper_receipt: { icon: "📄", text: "QR receipt ready for printing", textHi: "QR रसीद प्रिंट के लिए तैयार" },
+  card_load: { icon: "💳", text: "Loaded to RuPay card", textHi: "RuPay कार्ड में लोड किया" }
 };
 
-export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfile }) {
+export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfile, demoMode }) {
   const [visiblePayments, setVisiblePayments] = useState(0);
   const [showConfetti, setShowConfetti] = useState(false);
   const [showSummary, setShowSummary] = useState(false);
@@ -75,7 +75,6 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
   useEffect(() => {
     if (!payments.length) return;
 
-    // Show payments one by one
     let i = 0;
     const showNext = () => {
       i++;
@@ -83,7 +82,6 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
       if (i < payments.length) {
         setTimeout(showNext, 1200);
       } else {
-        // All done — show confetti + summary
         setTimeout(() => {
           setShowConfetti(true);
           setTimeout(() => setShowSummary(true), 500);
@@ -93,13 +91,15 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
     setTimeout(showNext, 600);
   }, [payments.length]);
 
+  const heldPayments = payments.filter(p => p.status === 'HELD');
+
   return (
     <div className="screen">
       {showConfetti && <ConfettiEffect />}
 
       {/* Header */}
       <div className="header" style={{ margin: '-32px -20px 0', borderRadius: 0 }}>
-        <div className="header-logo">M</div>
+        <div className="header-logo">K</div>
         <div className="header-text">
           <h1>KaamPay</h1>
           <p>Payment Status | भुगतान स्थिति</p>
@@ -117,22 +117,21 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
           {payments.map((payment, index) => {
             const isVisible = index < visiblePayments;
             const delivery = DELIVERY_ICONS[payment.delivery_method] || DELIVERY_ICONS.sms_payslip;
+            const isHeld = payment.status === 'HELD';
 
             if (!isVisible) return null;
 
             return (
               <div
-                key={payment.transaction_id}
+                key={payment.payment_id || payment.transaction_id}
                 className="payment-item card"
                 style={{ animationDelay: `${index * 0.1}s` }}
               >
                 <div className="flex gap-3 items-center">
-                  {/* Avatar */}
                   <div className="worker-avatar">
                     {payment.worker_name.split(' ').map(n => n[0]).join('')}
                   </div>
 
-                  {/* Name + Amount */}
                   <div className="flex-1">
                     <p className="font-semibold text-sm">{payment.worker_name}</p>
                     <p className="payment-amount">
@@ -140,8 +139,12 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
                     </p>
                   </div>
 
-                  {/* Check */}
-                  <div className="payment-check">✓</div>
+                  {/* Status icon */}
+                  {isHeld ? (
+                    <div className="payment-held">⏸</div>
+                  ) : (
+                    <div className="payment-check">✓</div>
+                  )}
                 </div>
 
                 {/* Transaction Details */}
@@ -152,26 +155,55 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
                 }}>
                   <div className="flex justify-between items-center">
                     <p className="text-xs text-gray" style={{ fontFamily: 'var(--font-mono)' }}>
-                      UPI Ref: {payment.upi_reference}
+                      {isHeld
+                        ? `Attempts: ${payment.attempts || 3}`
+                        : `UPI Ref: ${payment.upi_reference}`
+                      }
                     </p>
                     <span className="text-xs" style={{
-                      color: 'var(--green-600)',
+                      color: isHeld ? 'var(--amber-500)' : 'var(--blue-600)',
                       fontWeight: 600
                     }}>
                       {payment.status}
                     </span>
                   </div>
 
+                  {/* Retry info for held payments */}
+                  {isHeld && (
+                    <p className="text-xs mt-1" style={{
+                      color: '#92400e', fontFamily: 'var(--font-hi)'
+                    }}>
+                      ⏳ {payment.message_hindi || "Payment hold mein hai. Auto-retry hoga."}
+                    </p>
+                  )}
+
                   {/* Delivery Status */}
-                  <div className="flex items-center gap-1 mt-1">
-                    <span>{delivery.icon}</span>
-                    <span className="text-xs text-gray">{delivery.text} ✓</span>
-                  </div>
+                  {!isHeld && (
+                    <div className="flex items-center gap-1 mt-1">
+                      <span>{delivery.icon}</span>
+                      <span className="text-xs text-gray">{delivery.text} ✓</span>
+                    </div>
+                  )}
                 </div>
               </div>
             );
           })}
         </div>
+
+        {/* Held Payments Warning */}
+        {heldPayments.length > 0 && showSummary && (
+          <div className="wage-warning mt-4">
+            <span>⏸</span>
+            <div>
+              <p className="font-semibold" style={{ fontSize: '0.8125rem' }}>
+                {heldPayments.length} payment{heldPayments.length > 1 ? 's' : ''} held
+              </p>
+              <p style={{ fontFamily: 'var(--font-hi)', fontSize: '0.75rem' }}>
+                Auto-retry hoga 5 min mein. Amount aapke account mein safe hai.
+              </p>
+            </div>
+          </div>
+        )}
 
         {/* Summary */}
         {showSummary && (
@@ -179,21 +211,20 @@ export default function PaymentSuccess({ paisaOutput, hisaabOutput, onViewProfil
             marginTop: '24px',
             animation: 'screenFadeIn 0.5s var(--ease-out)'
           }}>
-            {/* Big summary card */}
             <div className="card card-elevated text-center p-5" style={{
-              background: 'linear-gradient(135deg, var(--green-50), var(--white))',
-              border: '2px solid var(--green-100)'
+              background: 'linear-gradient(135deg, var(--blue-50), var(--white))',
+              border: '2px solid var(--blue-100)'
             }}>
               <p style={{
                 fontSize: '2rem',
                 fontWeight: 800,
-                color: 'var(--green-700)',
+                color: 'var(--blue-700)',
                 letterSpacing: '-0.02em'
               }}>
                 ₹{paisaOutput?.total_paid?.toLocaleString()}
               </p>
               <p className="text-sm" style={{ fontFamily: 'var(--font-hi)', color: 'var(--gray-600)', marginTop: '4px' }}>
-                Aaj ₹{paisaOutput?.total_paid?.toLocaleString()} bheje gaye — {payments.length} mazdooron ko
+                Aaj ₹{paisaOutput?.total_paid?.toLocaleString()} bheje gaye — {payments.length} workers ko
               </p>
               <p className="text-xs text-gray mt-2">
                 Today ₹{paisaOutput?.total_paid?.toLocaleString()} sent to {payments.length} workers

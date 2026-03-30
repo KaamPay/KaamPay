@@ -5,9 +5,9 @@ import { CONSTANTS } from '../demo_data';
 /**
  * Screen 1: Voice Input
  * Contractor speaks, types, or plays demo audio.
- * Features: pulsing mic, waveform visualization, typewriter transcript, manual input
+ * v2.0 — Added demoMode prop, improved text fallback (FIX 09)
  */
-export default function VoiceInput({ onTranscribed }) {
+export default function VoiceInput({ onTranscribed, demoMode }) {
   const [isRecording, setIsRecording] = useState(false);
   const [transcript, setTranscript] = useState('');
   const [displayedText, setDisplayedText] = useState('');
@@ -31,7 +31,6 @@ export default function VoiceInput({ onTranscribed }) {
       } else {
         clearInterval(typingRef.current);
         setIsTyping(false);
-        // Auto-proceed after typing finishes
         setTimeout(() => handleSubmit(text), 800);
       }
     }, 40);
@@ -89,7 +88,7 @@ export default function VoiceInput({ onTranscribed }) {
     setIsProcessing(true);
     setErrorMsg('');
     try {
-      const result = await apiTranscribe(text);
+      const result = await apiTranscribe(text, demoMode);
       if (result.status === 'error') {
         setErrorMsg(result.error_message || 'API returned an error');
         setIsProcessing(false);
@@ -180,13 +179,13 @@ export default function VoiceInput({ onTranscribed }) {
               Tap to record • टैप करें रिकॉर्ड करने के लिए
             </p>
 
-            {/* Or Type Manually Button */}
+            {/* Voice not working? Type instead — prominent link (FIX 09) */}
             <button
               className="btn btn-outline"
               onClick={() => { setManualMode(true); setDisplayedText(''); }}
               style={{ fontSize: '0.85rem', padding: '8px 20px' }}
             >
-              ✏️ Type manually instead
+              ✏️ Voice not working? Type instead
             </button>
           </>
         ) : manualMode && !transcript ? (
@@ -204,18 +203,17 @@ export default function VoiceInput({ onTranscribed }) {
                 background: 'white',
                 minHeight: '100px',
                 resize: 'vertical',
-                border: '2px solid var(--green-200)',
+                border: '2px solid var(--blue-100)',
                 borderRadius: '12px',
                 fontSize: '1rem',
                 lineHeight: '1.5'
               }}
               value={displayedText}
               onChange={(e) => setDisplayedText(e.target.value)}
-              placeholder="e.g. Shivank worked 1 day for 700 rupees"
+              placeholder="e.g. Ramesh ne 1 din kaam kiya, 700 rupay rate"
               autoFocus
             />
 
-            {/* Error display */}
             {errorMsg && (
               <div style={{
                 background: '#FEF2F2', border: '1px solid #FECACA',
@@ -248,11 +246,11 @@ export default function VoiceInput({ onTranscribed }) {
             {isProcessing && (
               <div className="flex items-center gap-2 mt-4" style={{ justifyContent: 'center' }}>
                 <div style={{
-                  width: 20, height: 20, border: '2px solid var(--green-400)',
+                  width: 20, height: 20, border: '2px solid var(--blue-400)',
                   borderTopColor: 'transparent', borderRadius: '50%',
                   animation: 'spinStep 0.6s linear infinite'
                 }} />
-                <span className="text-sm text-green">Sending to Gemini AI...</span>
+                <span className="text-sm" style={{ color: 'var(--blue-600)' }}>Sending to Gemini AI...</span>
               </div>
             )}
           </div>
@@ -268,7 +266,6 @@ export default function VoiceInput({ onTranscribed }) {
               {isTyping && <span className="typewriter-cursor" />}
             </div>
 
-            {/* Error display */}
             {errorMsg && (
               <div style={{
                 background: '#FEF2F2', border: '1px solid #FECACA',
@@ -283,11 +280,11 @@ export default function VoiceInput({ onTranscribed }) {
             {isProcessing && (
               <div className="flex items-center gap-2 mt-4" style={{ justifyContent: 'center' }}>
                 <div style={{
-                  width: 20, height: 20, border: '2px solid var(--green-400)',
+                  width: 20, height: 20, border: '2px solid var(--blue-400)',
                   borderTopColor: 'transparent', borderRadius: '50%',
                   animation: 'spinStep 0.6s linear infinite'
                 }} />
-                <span className="text-sm text-green">Sending to Gemini AI...</span>
+                <span className="text-sm" style={{ color: 'var(--blue-600)' }}>Sending to Gemini AI...</span>
               </div>
             )}
           </div>

@@ -4,7 +4,7 @@ import { apiProcessPayroll } from '../api';
 /**
  * Screen 2: Processing
  * Shows AI pipeline working — 4 animated steps.
- * Tech judges see the raw JSON appearing.
+ * v2.0 — Fixed logo to "K", added demoMode
  */
 const STEPS = [
   { en: "Transcribing voice...", hi: "Voice samjhi ja rahi hai...", icon: "🎙️" },
@@ -13,11 +13,10 @@ const STEPS = [
   { en: "Payroll ready!", hi: "Payroll tayyar!", icon: "✅" }
 ];
 
-export default function Processing({ vaniOutput, onProcessed }) {
+export default function Processing({ vaniOutput, onProcessed, demoMode }) {
   const [currentStep, setCurrentStep] = useState(0);
   const [completedSteps, setCompletedSteps] = useState([]);
   const [showJson, setShowJson] = useState(false);
-  const [hisaabResult, setHisaabResult] = useState(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -37,9 +36,8 @@ export default function Processing({ vaniOutput, onProcessed }) {
       setShowJson(true);
 
       // Step 3: Minimum wage check — call HISAAB API
-      const result = await apiProcessPayroll(vaniOutput);
+      const result = await apiProcessPayroll(vaniOutput, demoMode);
       if (cancelled) return;
-      setHisaabResult(result);
       await delay(800);
       if (cancelled) return;
       setCompletedSteps(prev => [...prev, 2]);
@@ -70,7 +68,7 @@ export default function Processing({ vaniOutput, onProcessed }) {
     <div className="screen">
       {/* Header */}
       <div className="header" style={{ margin: '-32px -20px 0', borderRadius: 0 }}>
-        <div className="header-logo">M</div>
+        <div className="header-logo">K</div>
         <div className="header-text">
           <h1>KaamPay</h1>
           <p>AI Payroll Processing</p>
@@ -101,14 +99,14 @@ export default function Processing({ vaniOutput, onProcessed }) {
                 </div>
                 <div className="flex-1">
                   <p className="text-sm font-semibold" style={{
-                    color: status === 'done' ? 'var(--green-600)' :
+                    color: status === 'done' ? 'var(--blue-600)' :
                            status === 'active' ? 'var(--gray-900)' : 'var(--gray-400)'
                   }}>
                     {step.en}
                   </p>
                   <p className="text-xs" style={{
                     fontFamily: 'var(--font-hi)',
-                    color: status === 'done' ? 'var(--green-500)' : 'var(--gray-400)'
+                    color: status === 'done' ? 'var(--blue-500)' : 'var(--gray-400)'
                   }}>
                     {step.hi}
                   </p>
@@ -136,7 +134,7 @@ export default function Processing({ vaniOutput, onProcessed }) {
           <div className="flex items-center gap-2 mt-4">
             <div style={{
               width: 8, height: 8, borderRadius: '50%',
-              background: vaniOutput.confidence > 0.8 ? 'var(--green-400)' :
+              background: vaniOutput.confidence > 0.8 ? 'var(--blue-500)' :
                           vaniOutput.confidence > 0.6 ? 'var(--amber-400)' : 'var(--red-500)'
             }} />
             <span className="text-xs text-gray">

@@ -1,20 +1,36 @@
-import React, { useState } from 'react';
-import { apiExecutePayments } from '../api';
+import React, { useState, useEffect } from 'react';
+import { apiExecutePayments, apiCheckBalance } from '../api';
 
 /**
  * Screen 3: Payroll Review
  * Contractor confirms workers and amounts before payment.
- * Shows wage compliance warnings, delivery methods, KaamScore preview.
+ * v2.0 — Balance check (FIX 07), logo fix, demoMode
  */
 
 const DELIVERY_LABELS = {
   whatsapp_payslip: { label: "WhatsApp", labelHi: "व्हाट्सएप", emoji: "📱", cls: "whatsapp" },
   sms_payslip: { label: "SMS", labelHi: "एसएमएस", emoji: "💬", cls: "sms" },
-  qr_paper_receipt: { label: "QR Receipt", labelHi: "QR रसीद", emoji: "📄", cls: "qr" }
+  qr_paper_receipt: { label: "QR Receipt", labelHi: "QR रसीद", emoji: "📄", cls: "qr" },
+  card_load: { label: "RuPay Card", labelHi: "RuPay कार्ड", emoji: "💳", cls: "card" }
 };
 
-export default function PayrollReview({ hisaabOutput, onConfirm }) {
+export default function PayrollReview({ hisaabOutput, onConfirm, demoMode }) {
   const [isProcessing, setIsProcessing] = useState(false);
+  const [balanceCheck, setBalanceCheck] = useState(null);
+  const [balanceLoading, setBalanceLoading] = useState(true);
+
+  useEffect(() => {
+    if (hisaabOutput) {
+      checkBalance();
+    }
+  }, [hisaabOutput]);
+
+  const checkBalance = async () => {
+    setBalanceLoading(true);
+    const result = await apiCheckBalance(hisaabOutput.total_payout, demoMode);
+    setBalanceCheck(result);
+    setBalanceLoading(false);
+  };
 
   if (!hisaabOutput) return null;
 
@@ -22,17 +38,18 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
 
   const handlePayment = async () => {
     setIsProcessing(true);
-    const result = await apiExecutePayments(hisaabOutput);
+    const result = await apiExecutePayments(hisaabOutput, demoMode);
     onConfirm(result);
   };
 
   const hasWageWarning = entries.some(e => !e.wage_compliant);
+  const balanceSufficient = balanceCheck?.sufficient !== false;
 
   return (
     <div className="screen" style={{ paddingBottom: '100px' }}>
       {/* Header */}
       <div className="header" style={{ margin: '-32px -20px 0', borderRadius: 0 }}>
-        <div className="header-logo">M</div>
+        <div className="header-logo">K</div>
         <div className="header-text">
           <h1>KaamPay</h1>
           <p>Payroll Review | पेरोल समीक्षा</p>
@@ -48,9 +65,39 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
           </div>
           <div className="text-right">
             <p className="text-xs text-gray">Workers</p>
-            <p className="text-lg font-bold text-green">{worker_count}</p>
+            <p className="text-lg font-bold text-blue">{worker_count}</p>
           </div>
         </div>
+
+        {/* Balance Warning (FIX 07) */}
+        {!balanceLoading && !balanceSufficient && (
+          <div className="balance-warning mb-4">
+            <span>🔴</span>
+            <div className="flex-1">
+              <p className="font-semibold" style={{ fontSize: '0.8125rem' }}>Insufficient Balance</p>
+              <p style={{ fontFamily: 'var(--font-hi)', fontSize: '0.75rem' }}>
+                {balanceCheck?.message_hindi}
+              </p>
+            </div>
+            <button
+              className="btn btn-outline"
+              style={{ fontSize: '0.7rem', padding: '4px 10px' }}
+              onClick={() => alert('Opens Paytm Add Money flow')}
+            >
+              + Add ₹{balanceCheck?.shortfall?.toLocaleString()}
+            </button>
+          </div>
+        )}
+
+        {/* Balance OK indicator */}
+        {!balanceLoading && balanceSufficient && (
+          <div className="balance-ok mb-4">
+            <span>✅</span>
+            <p className="text-xs" style={{ color: 'var(--blue-700)' }}>
+              Balance: ₹{balanceCheck?.available_balance?.toLocaleString()} available
+            </p>
+          </div>
+        )}
 
         {/* Wage Warning */}
         {hasWageWarning && (
@@ -68,7 +115,7 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
         {/* Worker Cards */}
         <div className="flex flex-col gap-3">
           {entries.map((entry, index) => {
-            const delivery = DELIVERY_LABELS[entry.delivery_method] || DELIVERY_LABELS.qr_paper_receipt;
+            const delivery = DELIVERY_LABELS[entry.delivery_method] || DELIVERY_LABELS.sms_payslip;
             return (
               <div 
                 key={entry.worker_id} 
@@ -91,7 +138,7 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-xl font-bold text-green">₹{entry.net_pay.toLocaleString()}</p>
+                        <p className="text-xl font-bold text-blue">₹{entry.net_pay.toLocaleString()}</p>
                       </div>
                     </div>
 
@@ -162,7 +209,7 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
           <p style={{
             fontSize: '1.5rem',
             fontWeight: 800,
-            color: 'var(--green-700)',
+            color: 'var(--blue-700)',
             letterSpacing: '-0.02em'
           }}>
             ₹{total_payout.toLocaleString()}
@@ -172,7 +219,7 @@ export default function PayrollReview({ hisaabOutput, onConfirm }) {
         <button
           className="btn btn-paytm btn-full btn-lg"
           onClick={handlePayment}
-          disabled={isProcessing}
+          disabled={isProcessing || (!balanceSufficient && !demoMode)}
           id="pay-button"
           style={{ opacity: isProcessing ? 0.7 : 1 }}
         >
