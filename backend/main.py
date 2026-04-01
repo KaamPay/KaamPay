@@ -11,7 +11,12 @@ v2.0 — Added:
 - Contractor dashboard endpoints (FIX 13)
 """
 
+import sys
 import os
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import json
 from datetime import date
 from fastapi import FastAPI, HTTPException, Header

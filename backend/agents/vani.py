@@ -4,7 +4,12 @@ Takes Hindi voice/text input and extracts structured payroll data.
 Uses Gemini 2.0 Flash for NER extraction with retry logic for rate limits.
 """
 
+import sys
 import os
+
+if sys.stdout and hasattr(sys.stdout, 'reconfigure'):
+    sys.stdout.reconfigure(encoding='utf-8')
+
 import re
 import json
 import time
