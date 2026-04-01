@@ -25,7 +25,7 @@ from fastapi.responses import FileResponse, JSONResponse
 from pydantic import BaseModel
 from typing import Optional
 
-from agents.vani import transcribe_and_extract
+from agents.vani import extract_with_retry, preprocess_transcript, validate_entry_count, verify_workers
 from agents.hisaab import process_payroll, register_worker
 from agents.paisa import (
     execute_all_payments, calculate_kaam_score, get_worker_history,
@@ -111,12 +111,52 @@ class RegisterWorkerRequest(BaseModel):
 
 @app.post("/api/transcribe")
 async def api_transcribe(req: TranscribeRequest):
-    """Takes text or audio, returns structured payroll data."""
+    """Takes text or audio, returns structured payroll data with worker verification."""
     try:
-        result = transcribe_and_extract(
-            text=req.text,
-            audio_base64=req.audio_base64
-        )
+        # Get transcript
+        if req.audio_base64:
+            transcript = CONSTANTS.get("demo_audio_transcript", "")
+        elif req.text:
+            transcript = req.text
+        else:
+            transcript = CONSTANTS.get("demo_audio_transcript", "")
+
+        # FIX 4: Preprocess before sending to LLM
+        cleaned_transcript = preprocess_transcript(transcript)
+
+        # FIX 3: Extract with retry
+        result = await extract_with_retry(cleaned_transcript)
+
+        # FIX 4: Validate entry count
+        if (result.get("status") == "success" and
+            not validate_entry_count(result, transcript)):
+            result = await extract_with_retry(transcript)
+            result["parsing_notes"] += " [retried: entry count mismatch]"
+
+        # VERIFICATION GATE: Validate extracted names against worker database
+        if result.get("payroll_entries"):
+            verification = verify_workers(result["payroll_entries"])
+            result["verification"] = {
+                "all_verified": verification["all_verified"],
+                "verified_count": verification["verified_count"],
+                "unverified_count": verification["unverified_count"],
+                "unverified_names": verification["unverified_names"],
+                "details": verification["verification_details"]
+            }
+
+            if verification["all_verified"]:
+                # Replace entries with verified versions (canonical names + worker IDs)
+                result["payroll_entries"] = verification["verified_entries"]
+                verified_names = [e["worker_name"] for e in verification["verified_entries"]]
+                result["readback_hindi"] = f"Worker {', '.join(verified_names)} verified. Access accepted."
+            else:
+                # Stop all further processes immediately
+                result["status"] = "error"
+                # STRICT CONSTRAINT: Do not allow any data entry or logging if name is not verified.
+                result["payroll_entries"] = []
+                result["error_message"] = "Worker not found."
+                result["readback_hindi"] = "Worker not found."
+
         return JSONResponse(content=result)
     except Exception as e:
         return JSONResponse(content={
@@ -126,6 +166,27 @@ async def api_transcribe(req: TranscribeRequest):
             "confidence": 0.0,
             "readback_hindi": "",
             "error_message": str(e)
+        })
+
+
+# ─────────────────────────────────────────
+# Endpoint 1b: Verify Workers (standalone)
+# ─────────────────────────────────────────
+
+class VerifyWorkersRequest(BaseModel):
+    worker_names: list
+
+@app.post("/api/verify-workers")
+async def api_verify_workers(req: VerifyWorkersRequest):
+    """Standalone worker verification endpoint."""
+    try:
+        entries = [{"worker_name": name} for name in req.worker_names]
+        result = verify_workers(entries)
+        return JSONResponse(content=result)
+    except Exception as e:
+        return JSONResponse(content={
+            "all_verified": False,
+            "error": str(e)
         })
 
 
