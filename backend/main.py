@@ -266,7 +266,7 @@ async def api_register_worker(req: RegisterWorkerRequest):
             "kaam_band": "building",
             "kaam_score": 600
         }
-        contractor_id = CONSTANTS.get("demo_contractor", {}).get("id", "C_12345678")
+        contractor_id = CONSTANTS.get("demo_contractor", {}).get("contractor_id", "CONT_001")
         result = register_worker(contractor_id, worker_data, aadhaar_full=req.aadhaar_number)
         return JSONResponse(content=result)
     except Exception as e:
